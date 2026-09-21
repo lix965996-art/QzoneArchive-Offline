@@ -1,0 +1,27 @@
+name: Quality
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: npm ci
+      - run: npm run build
+      - run: cargo fmt --check
+        working-directory: src-tauri
+      - run: cargo check --locked
+        working-directory: src-tauri
+      - run: cargo test --locked --lib
+        working-directory: src-tauri

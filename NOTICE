@@ -1,0 +1,18 @@
+QzoneArchive Offline
+
+This is a modified distribution of QzoneArchive, not the official upstream release.
+Upstream: https://github.com/Gaoshu705/QzoneArchive
+Upstream baseline: dfe5b95a6b6202659fb5218b3f719a98b41fd6b4
+Original authors and contributors: Ehre, LibraHp_0928, Gaoshu705 and the upstream contributors.
+Original copyright notices in source files and resources remain applicable.
+
+Offline delivery modifications and documentation maintained by lix965996-art.
+Modification publication date: 2026-09-21.
+See docs/CHANGES.md for the areas changed from upstream.
+
+The combined derivative project remains licensed under GNU GPL version 3.
+The full license is included in LICENSE. This is not an Apache-2.0 relicensing.
+No affiliation with Tencent, QQ, QQ Zone, or the upstream maintainers is implied.
+
+Screenshots and example documents in this repository use fictional demonstration
+data. They are not recovered customer data or evidence of recovery completeness.

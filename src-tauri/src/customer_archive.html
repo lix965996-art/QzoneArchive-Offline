@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QQ空间归档 · {{TITLE}}</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#243247;font:15px/1.8 system-ui,"Microsoft YaHei",sans-serif}main{width:min(900px,calc(100% - 28px));margin:28px auto}h1{margin-bottom:4px}.intro,time,.stats{color:#64748b}.guide{background:#e9f1ff;border-radius:12px;padding:16px}.card{break-inside:avoid;background:white;border:1px solid #e5eaf2;border-radius:14px;padding:20px;margin:16px 0}header{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.content{margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}.pictures{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.pictures img{width:100%;height:220px;object-fit:contain;background:#f8fafc;border-radius:8px}video{display:block;max-width:100%;max-height:560px;background:#111;margin:15px 0}.missing{display:block;padding:12px;background:#fff6df;color:#735a25;font-size:13px;border-radius:8px}a{color:#1765ba;overflow-wrap:anywhere}.comments{margin-top:12px;padding:12px;background:#f6f8fb;border-radius:9px}.comment{margin:7px 0}.reply{margin:5px 0 0 18px;padding-left:9px;border-left:2px solid #c9dcf6}input{width:100%;padding:12px;border:1px solid #b9cce7;border-radius:8px;margin:12px 0;font:inherit}[hidden]{display:none!important}@media(max-width:600px){.pictures{grid-template-columns:repeat(2,minmax(0,1fr))}.pictures img{height:160px}.card{padding:14px}}@page{size:A4;margin:12mm}@media print{body{background:white;font-size:12px}main{width:100%;margin:0}.guide,.search{display:none}.card{box-shadow:none}video{display:none}.pictures img{height:170px}}
+</style></head><body><main>
+<h1>QQ空间归档 · {{TITLE}}</h1><p class="intro">账号 {{OWNER}} · 共 {{COUNT}} 条 · 导出于 {{GENERATED}}</p>
+<section class="guide"><strong>这是一份离线阅读档案，无需登录 QQ。</strong><br>请先将 ZIP <strong>全部解压</strong>，再用 Edge / Chrome 打开“开始阅读.html”。不要只把网页单独取出，也不要在聊天软件或压缩包预览里打开。<br>图片可点击查看原尺寸，视频可直接播放；手机预览不兼容时，请阅读 pdf 文件夹内的 PDF（PDF 不包含可播放视频）。<br><a href="导出说明.html">查看交付内容、PDF 目录及未收录项目</a></section>
+<div class="search" hidden><input id="search" type="search" placeholder="搜索文字、昵称或日期"><span id="search-count"></span></div>
+{{CARDS}}
+</main><script>
+// All text and dates are static; reading does not depend on JavaScript.
+const cards=Array.from(document.querySelectorAll('.card'));
+document.querySelector('.search').hidden=false;
+document.getElementById('search').addEventListener('input',e=>{let count=0;const key=e.target.value.toLocaleLowerCase();cards.forEach(card=>{card.hidden=!card.textContent.toLocaleLowerCase().includes(key);if(!card.hidden)count++});document.getElementById('search-count').textContent='显示 '+count+' / '+cards.length+' 条'});
+const images=Array.from(document.images);Promise.all(images.map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true})}))).then(()=>Promise.all(images.map(img=>img.decode?img.decode().catch(()=>{}):Promise.resolve()))).then(()=>{document.documentElement.dataset.printReady='true'});
+</script></body></html>
