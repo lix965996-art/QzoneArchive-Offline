@@ -7,12 +7,14 @@ import InputNumber from "primevue/inputnumber";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { open } from "@tauri-apps/plugin-dialog";
+import { platform } from "@tauri-apps/plugin-os";
 import { useAuthStore } from "../stores/auth";
 import { DEFAULT_ARCHIVE_INTERVAL, MIN_ARCHIVE_INTERVAL, getArchiveInterval, resetAppSettings, setArchiveInterval } from "../utils/appSettings";
 import { deleteAllAppData, getArchiveStorageInfo, setArchiveStorageDir, type ArchiveStorageInfo } from "../utils/qzone";
 import { isWebDebugRuntime } from "../utils/runtime";
 
 const authStore = useAuthStore();
+const isAndroid = !isWebDebugRuntime && platform() === "android";
 const { loggedIn, user } = storeToRefs(authStore);
 const intervalMs = ref(getArchiveInterval());
 const privacyVisible = ref(false);
@@ -79,7 +81,7 @@ async function deleteEverything() {
 
     <article class="surface-card settings-card storage-setting">
       <div class="settings-copy"><span class="settings-icon tone-blue"><i class="pi pi-folder" /></span><div><h3>归档保存位置</h3><p>{{ storage?.custom ? "当前使用你选择的自定义目录" : "当前使用系统应用数据目录" }}</p><small class="storage-current-path">{{ storage?.rootDir || "正在读取…" }}</small></div></div>
-      <div class="storage-actions"><Button label="选择文件夹" icon="pi pi-folder-open" outlined :loading="changingStorage" @click="chooseStorageDirectory" /><small>切换时复制已有数据库、图片和视频，不删除旧目录。</small></div>
+      <div class="storage-actions"><Button v-if="!isAndroid" label="选择文件夹" icon="pi pi-folder-open" outlined :loading="changingStorage" @click="chooseStorageDirectory" /><small>{{ isAndroid ? "Android 使用应用专属目录，避免系统文档目录权限导致数据库损坏。" : "切换时复制已有数据库、图片和视频，不删除旧目录。" }}</small></div>
     </article>
     <p v-if="storageNotice" class="settings-success"><i class="pi pi-check-circle" />{{ storageNotice }}</p>
 

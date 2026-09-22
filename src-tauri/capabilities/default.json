@@ -11,6 +11,13 @@
     "dialog:allow-open",
     "fs:allow-write-file",
     {
+      "identifier": "fs:allow-open",
+      "allow": [
+        { "path": "$APPDATA/**" },
+        { "path": "$APPCACHE/**" }
+      ]
+    },
+    {
       "identifier": "http:default",
       "allow": [
         { "url": "https://h5.qzone.qq.com/*" },

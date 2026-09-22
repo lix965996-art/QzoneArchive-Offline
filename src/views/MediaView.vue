@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { platform } from "@tauri-apps/plugin-os";
 import { open } from "@tauri-apps/plugin-dialog";
 import Button from "primevue/button";
 import DatePicker from "primevue/datepicker";
@@ -9,10 +10,12 @@ import ProgressBar from "primevue/progressbar";
 import Select from "primevue/select";
 import QzoneText from "../components/QzoneText.vue";
 import { loadRemoteImageBlob } from "../utils/archiveImage";
-import { cancelTransfer, getArchivedFeed, getTransferProgress, listArchivedMedia, loadArchivedImage, loadArchivedVideo, startMediaDownload, type ArchiveItem, type ArchiveMediaItem, type MediaDownloadMode, type TransferProgress } from "../utils/qzone";
+import { cancelTransfer, getArchiveStorageInfo, getArchivedFeed, getTransferProgress, listArchivedMedia, loadArchivedImage, loadArchivedVideo, startMediaDownload, type ArchiveItem, type ArchiveMediaItem, type MediaDownloadMode, type TransferProgress } from "../utils/qzone";
 import { isWebDebugRuntime } from "../utils/runtime";
 
 const PAGE_SIZE = 60;
+const currentPlatform = isWebDebugRuntime ? "windows" : platform();
+const isAndroid = currentPlatform === "android";
 const media = ref<ArchiveMediaItem[]>([]);
 const years = ref<number[]>([]);
 const selectedYear = ref(0);
@@ -154,6 +157,8 @@ async function downloadAll(mode: MediaDownloadMode) {
   try {
     const selected = isWebDebugRuntime
       ? "D:\\QQ空间归档（网页模拟）\\media"
+      : isAndroid
+        ? `${(await getArchiveStorageInfo()).exportsDir.replace(/[\\/]$/, "")}/media`
       : await open({ directory: true, multiple: false, title: "选择媒体保存目录" });
     if (!selected || Array.isArray(selected)) return;
     const { startAt, endAt } = downloadTimestamps();
@@ -194,7 +199,7 @@ onBeforeUnmount(() => {
     </section>
 
     <section class="surface-card media-download-panel">
-      <div class="media-download-copy"><span><i class="pi pi-download" /></span><div><h3>批量下载媒体</h3><p>可限定日期范围。已完成文件自动跳过，失败最多重试 3 次；视频中断后保留 .part 并续传。</p></div></div>
+      <div class="media-download-copy"><span><i class="pi pi-download" /></span><div><h3>批量下载媒体</h3><p>{{ isAndroid ? "手机版保存到应用导出目录；可限定日期范围，失败最多重试 3 次。" : "可限定日期范围。已完成文件自动跳过，失败最多重试 3 次；视频中断后保留 .part 并续传。" }}</p></div></div>
       <div class="media-download-controls"><DatePicker v-model="downloadRange" selection-mode="range" :manual-input="false" show-button-bar date-format="yy-mm-dd" placeholder="全部时间" :disabled="downloading" /><div><Button label="全部图片" icon="pi pi-images" outlined :loading="selectingDownload === 'images'" :disabled="downloading" @click="downloadAll('images')" /><Button label="全部视频" icon="pi pi-video" outlined :loading="selectingDownload === 'videos'" :disabled="downloading" @click="downloadAll('videos')" /><Button label="全部媒体" icon="pi pi-download" :loading="selectingDownload === 'all'" :disabled="downloading" @click="downloadAll('all')" /><Button v-if="downloading" label="停止" icon="pi pi-stop" severity="warn" outlined @click="stopDownload" /></div></div>
       <div v-if="transfer.status !== 'idle'" class="media-download-progress"><div><span>{{ transfer.message }}</span><strong>{{ transferPercent }}%</strong></div><ProgressBar :value="transferPercent" :show-value="false" style="height: 7px" /><small>已处理 {{ transfer.completed }}/{{ transfer.total }} · 新下载 {{ transfer.downloaded }} · 跳过已有 {{ transfer.skipped }} · QQ 原文件不可用 {{ transfer.unavailable }} · 真正失败 {{ transfer.failed }}<template v-if="transfer.outputDir"> · {{ transfer.outputDir }}</template></small></div>
     </section>
