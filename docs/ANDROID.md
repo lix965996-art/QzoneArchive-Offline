@@ -4,7 +4,7 @@
 
 Android 版沿用 Vue 3 + Tauri 2 + Rust，不需要改写成 uni-app。已完成 ARM64 APK 构建验证，最低 Android 7（API 24），目标 API 36。
 
-可从 [v1.3.0 Android 预览版](https://github.com/lix965996-art/QzoneArchive-Offline/releases/tag/v1.3.0-android-preview.1) 下载 APK。当前包使用 Android 调试证书签名，仅供侧载测试；后续稳定版会换成独立、长期保存的发行证书。
+可从 [v1.3.0 Android 预览版](https://github.com/lix965996-art/QzoneArchive-Offline/releases/tag/v1.3.0-android-preview.2) 下载 APK。当前包使用 Android 调试证书签名，仅供侧载测试；后续稳定版会换成独立、长期保存的发行证书。
 
 - 支持二维码登录、归档任务、记录浏览、图片/视频查看和本地 SQLite 存储。
 - 手机端使用应用专属数据目录，避免 Android 文档目录 URI 被误当成本地路径而损坏数据库。
@@ -23,6 +23,7 @@ HBuilderX 不是本项目的构建工具，但它附带的 Amazon Corretto JDK 1
 
 npm ci
 npm run tauri:android:init -- --ci
+npm run tauri:android:icons
 npm run tauri -- android build --debug --apk --target aarch64 --ci
 ```
 
