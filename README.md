@@ -6,7 +6,7 @@
 
 [下载 Windows 安装包](https://github.com/lix965996-art/QzoneArchive-Offline/releases/latest) · [使用指南](docs/USAGE.md) · [修改说明](docs/CHANGES.md) · [许可证](LICENSE)
 
-[下载 Android ARM64 预览版](https://github.com/lix965996-art/QzoneArchive-Offline/releases/tag/v1.3.0-android-preview.1) · [Android 版说明](docs/ANDROID.md)。HBuilderX 只复用其 JDK/ADB，本项目仍使用 Tauri Android 工具链。预览包尚未完成真机验证，不替代稳定版。
+[下载 Android ARM64 预览版](https://github.com/lix965996-art/QzoneArchive-Offline/releases/tag/v1.3.0-android-preview.2) · [Android 版说明](docs/ANDROID.md)。HBuilderX 只复用其 JDK/ADB，本项目仍使用 Tauri Android 工具链。预览包尚未完成真机验证，不替代稳定版。
 
 ## 可以做什么
 
