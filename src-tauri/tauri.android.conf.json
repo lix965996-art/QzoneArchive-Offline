@@ -1,0 +1,10 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "io.github.lix965996art.qzonearchiveoffline",
+  "bundle": {
+    "android": {
+      "minSdkVersion": 24,
+      "versionCode": 1003000
+    }
+  }
+}

@@ -2,8 +2,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { platform } from "@tauri-apps/plugin-os";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { open, save } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
+import { open as openDialog, save } from "@tauri-apps/plugin-dialog";
+import { open as openFile, writeFile } from "@tauri-apps/plugin-fs";
 import Button from "primevue/button";
 import Checkbox from "primevue/checkbox";
 import DatePicker from "primevue/datepicker";
@@ -14,11 +14,15 @@ import ProgressBar from "primevue/progressbar";
 import QzoneText from "../components/QzoneText.vue";
 import { loadRemoteImageBlob } from "../utils/archiveImage";
 import { useAuthStore } from "../stores/auth";
-import { cancelTransfer, clearArchivedFeeds, countArchivedFeeds, deleteArchivedFeeds, exportArchivePdf, exportArchivedHtml, exportShareZip, getTransferProgress, listArchivedFeeds, loadArchivedImage, loadArchivedVideo, type ArchiveCategory, type ArchiveItem, type TransferProgress } from "../utils/qzone";
+import { cancelTransfer, clearArchivedFeeds, countArchivedFeeds, deleteArchivedFeeds, exportArchivePdf, exportArchivedHtml, exportShareZip, getArchiveStorageInfo, getTransferProgress, listArchivedFeeds, loadArchivedImage, loadArchivedVideo, type ArchiveCategory, type ArchiveItem, type TransferProgress } from "../utils/qzone";
 import { isWebDebugRuntime } from "../utils/runtime";
 
 type DeleteAction = "selected" | "all";
 const authStore = useAuthStore();
+const currentPlatform = isWebDebugRuntime ? "windows" : platform();
+const desktopPlatforms = new Set(["windows", "macos", "linux"]);
+const isDesktopPlatform = desktopPlatforms.has(currentPlatform);
+const isAndroid = currentPlatform === "android";
 const records = ref<ArchiveItem[]>([]);
 const query = ref("");
 const loading = ref(false);
@@ -28,7 +32,8 @@ const advancedExportVisible = ref(false);
 const advancedExportMode = ref<"pdf" | "zip">("pdf");
 const advancedExportRange = ref<Date[] | null>(null);
 const splitByYear = ref(true);
-const includePdfInZip = ref(true);
+const includePdfInZip = ref(!isAndroid);
+const mobileExportsDir = ref("");
 const exportNotice = ref("");
 const error = ref("");
 const transfer = ref<TransferProgress>({ status: "idle", kind: "idle", total: 0, completed: 0, downloaded: 0, skipped: 0, unavailable: 0, failed: 0, current: "", message: "尚未开始导出" });
@@ -68,9 +73,6 @@ let transferTimer: number | undefined;
 const expandedComments = reactive(new Set<number>());
 const expandedLikes = reactive(new Set<number>());
 let imageObserver: IntersectionObserver | undefined;
-const currentPlatform = isWebDebugRuntime ? "windows" : platform();
-const desktopPlatforms = new Set(["windows", "macos", "linux"]);
-const isDesktopPlatform = desktopPlatforms.has(currentPlatform);
 const transferRunning = computed(() => transfer.value.status === "running");
 const transferPercent = computed(() => transfer.value.total ? Math.min(100, Math.round(transfer.value.completed / transfer.value.total * 100)) : 0);
 const transferKindLabel = computed(() => ({ media: "准备媒体", pdf: "生成 PDF", zip: "生成 ZIP", idle: "导出任务" }[transfer.value.kind]));
@@ -216,12 +218,33 @@ async function savePreviewImage() {
   savingImage.value = true; error.value = "";
   try {
     const extension = previewImageName.value.split(".").pop() || "jpg";
-    const path = await save({ defaultPath: previewImageName.value, filters: [{ name: "图片", extensions: [extension, "jpg", "png", "webp"] }] });
+    const path = await save({ defaultPath: previewImageName.value, filters: [{ name: "图片", extensions: isAndroid ? ["image/*"] : [extension, "jpg", "png", "webp"] }] });
     if (!path) return;
     const response = await window.fetch(previewImageUrl.value);
     await writeFile(path, new Uint8Array(await response.arrayBuffer()));
   } catch (reason) { error.value = `保存图片失败：${String(reason)}`; }
   finally { savingImage.value = false; }
+}
+async function copyToAndroidDocument(sourcePath: string, destinationUri: string) {
+  const source = await openFile(sourcePath, { read: true });
+  let destination;
+  try {
+    destination = await openFile(destinationUri, { write: true, truncate: true });
+    const buffer = new Uint8Array(1024 * 1024);
+    while (true) {
+      const bytesRead = await source.read(buffer);
+      if (bytesRead === null) break;
+      let bytesWritten = 0;
+      while (bytesWritten < bytesRead) {
+        const written = await destination.write(buffer.subarray(bytesWritten, bytesRead));
+        if (written === 0) throw new Error("系统文件写入提前中断");
+        bytesWritten += written;
+      }
+    }
+  } finally {
+    await source.close();
+    if (destination) await destination.close();
+  }
 }
 async function exportHtml(selectedOnly: boolean) {
   if (exporting.value || (selectedOnly && !selectedIds.value.length)) return;
@@ -276,21 +299,29 @@ async function runAdvancedExport() {
     if (advancedExportMode.value === "pdf") {
       const outputDir = isWebDebugRuntime
         ? "D:\\QQ空间归档（网页模拟）"
-        : await open({ directory: true, multiple: false, title: "选择 PDF 保存目录" });
+        : await openDialog({ directory: true, multiple: false, title: "选择 PDF 保存目录" });
       if (!outputDir || Array.isArray(outputDir)) return;
       transfer.value = { status: "running", kind: "pdf", total: 0, completed: 0, downloaded: 0, skipped: 0, unavailable: 0, failed: 0, current: "", message: "正在启动 PDF 导出…" };
       beginTransferPolling();
       const result = await exportArchivePdf(category.value, outputDir, splitByYear.value, ids, startAt, endAt);
       exportNotice.value = `已生成 ${result.files.length} 个 PDF，保存到 ${result.path}${result.warnings.length ? `；${result.warnings.length} 项警告` : ""}`;
     } else {
+      const fileName = `QQ空间归档-${categoryLabel.value}-${new Date().toISOString().slice(0, 10)}.zip`;
+      const mobileDestination = isAndroid
+        ? await save({ defaultPath: fileName, filters: [{ name: "ZIP 压缩包", extensions: ["application/zip"] }] })
+        : undefined;
+      if (isAndroid && !mobileDestination) return;
       const outputPath = isWebDebugRuntime
         ? "D:\\QQ空间归档（网页模拟）\\QQ空间归档.zip"
-        : await save({ defaultPath: `QQ空间归档-${categoryLabel.value}-${new Date().toISOString().slice(0, 10)}.zip`, filters: [{ name: "ZIP 压缩包", extensions: ["zip"] }] });
+        : isAndroid
+          ? `${mobileExportsDir.value.replace(/[\\/]$/, "")}/${fileName}`
+        : await save({ defaultPath: fileName, filters: [{ name: "ZIP 压缩包", extensions: ["zip"] }] });
       if (!outputPath) return;
       transfer.value = { status: "running", kind: "zip", total: 0, completed: 0, downloaded: 0, skipped: 0, unavailable: 0, failed: 0, current: "", message: "正在启动 ZIP 导出…" };
       beginTransferPolling();
-      const result = await exportShareZip(category.value, outputPath, splitByYear.value, includePdfInZip.value, ids, startAt, endAt);
-      exportNotice.value = `可直接分享的 ZIP 已生成：${result.path}${result.unavailable ? `；${result.unavailable} 个 QQ 原文件已删除或失效` : ""}${result.failed ? `；${result.failed} 个媒体真正下载失败，详情见包内清单` : ""}`;
+      const result = await exportShareZip(category.value, outputPath, splitByYear.value, isAndroid ? false : includePdfInZip.value, ids, startAt, endAt);
+      if (isAndroid && mobileDestination) await copyToAndroidDocument(result.path, mobileDestination);
+      exportNotice.value = `${isAndroid ? "ZIP 已复制到你选择的手机位置" : `可直接分享的 ZIP 已生成：${result.path}`}${result.unavailable ? `；${result.unavailable} 个 QQ 原文件已删除或失效` : ""}${result.failed ? `；${result.failed} 个媒体真正下载失败，详情见包内清单` : ""}`;
       if (result.warnings.length) {
         exportNotice.value += `；有 ${result.warnings.length} 项说明，请查看包内“导出说明.html”`;
         const pdfWarnings = result.warnings.filter(warning => warning.includes("PDF"));
@@ -331,6 +362,10 @@ async function confirmDelete() {
   finally { deleting.value = false; }
 }
 onMounted(async () => {
+  if (isAndroid) {
+    try { mobileExportsDir.value = (await getArchiveStorageInfo()).exportsDir; }
+    catch (reason) { error.value = `读取手机导出目录失败：${String(reason)}`; }
+  }
   if (authStore.loggedIn) await load();
   await refreshTransferProgress();
   if (transfer.value.status === "running") beginTransferPolling();
@@ -348,9 +383,9 @@ onBeforeUnmount(() => { clearLongPress(); window.clearInterval(transferTimer); i
     </div>
     <div class="archive-header-actions">
       <Button icon="pi pi-refresh" label="刷新" severity="secondary" text :loading="loading" @click="load" />
-      <Button icon="pi pi-file" label="导出 PDF" severity="secondary" text :loading="exporting" :disabled="!totalRecords || loading || transferRunning" @click="openAdvancedExport('pdf')" />
+      <Button v-if="!isAndroid" icon="pi pi-file" label="导出 PDF" severity="secondary" text :loading="exporting" :disabled="!totalRecords || loading || transferRunning" @click="openAdvancedExport('pdf')" />
       <Button icon="pi pi-box" label="分享 ZIP" severity="secondary" text :loading="exporting" :disabled="!totalRecords || loading || transferRunning" @click="openAdvancedExport('zip')" />
-      <Button icon="pi pi-code" label="导出 HTML" severity="secondary" text :loading="exporting" :disabled="!totalRecords || loading || transferRunning" @click="exportHtml(false)" />
+      <Button v-if="!isAndroid" icon="pi pi-code" label="导出 HTML" severity="secondary" text :loading="exporting" :disabled="!totalRecords || loading || transferRunning" @click="exportHtml(false)" />
       <Button icon="pi pi-trash" label="清空归档" severity="danger" text :disabled="!totalRecords || loading" @click="askDelete('all')" />
     </div>
   </section>
@@ -438,13 +473,14 @@ onBeforeUnmount(() => { clearLongPress(); window.clearInterval(transferTimer); i
   <Dialog v-model:visible="advancedExportVisible" modal :closable="!exporting" :draggable="false" class="archive-export-dialog" :header="advancedExportMode === 'pdf' ? '导出 PDF' : '生成可分享 ZIP'">
     <div class="archive-export-options">
       <div><label>导出时间范围</label><DatePicker v-model="advancedExportRange" selection-mode="range" :manual-input="false" show-button-bar date-format="yy-mm-dd" placeholder="全部时间" :disabled="exporting" /><small>留空导出全部；选择两天可限定自由时间跨度。</small></div>
-      <label class="archive-export-check"><Checkbox v-model="splitByYear" binary :disabled="exporting" /><span><strong>按年份拆分</strong><small>分别生成每一年的文件；PDF 超过 100 条自动分册，避免大文件打印失败。</small></span></label>
-      <label v-if="advancedExportMode === 'zip'" class="archive-export-check"><Checkbox v-model="includePdfInZip" binary :disabled="exporting" /><span><strong>ZIP 中包含 PDF（建议交付客户时勾选）</strong><small>客户完整解压后打开“开始阅读.html”；包含已成功保存的图片/视频、PDF 和中文导出说明，不需要阅读 JSON。</small></span></label>
+      <label v-if="!isAndroid" class="archive-export-check"><Checkbox v-model="splitByYear" binary :disabled="exporting" /><span><strong>按年份拆分</strong><small>分别生成每一年的文件；PDF 超过 100 条自动分册，避免大文件打印失败。</small></span></label>
+      <label v-if="advancedExportMode === 'zip' && !isAndroid" class="archive-export-check"><Checkbox v-model="includePdfInZip" binary :disabled="exporting" /><span><strong>ZIP 中包含 PDF（建议交付客户时勾选）</strong><small>客户完整解压后打开“开始阅读.html”；包含已成功保存的图片/视频、PDF 和中文导出说明，不需要阅读 JSON。</small></span></label>
+      <p v-if="isAndroid" class="archive-export-scope"><i class="pi pi-mobile" />手机版生成离线网页和媒体 ZIP，保存到应用导出目录；PDF 请在电脑版本生成。</p>
       <p class="archive-export-scope"><i class="pi pi-info-circle" />{{ selectedIds.length ? `将导出当前选中的 ${selectedIds.length} 条${categoryLabel}` : `将导出时间范围内的全部${categoryLabel}` }}</p>
       <div v-if="transferRunning" class="media-download-progress"><div><span>{{ transfer.message }}</span><strong>{{ transferPercent }}%</strong></div><ProgressBar :value="transferPercent" :show-value="false" style="height: 7px" /><small>已处理 {{ transfer.completed }}/{{ transfer.total }} · 下载 {{ transfer.downloaded }} · 跳过 {{ transfer.skipped }} · 原文件不可用 {{ transfer.unavailable }} · 真正失败 {{ transfer.failed }}<template v-if="transfer.current"> · 当前：{{ transfer.current }}</template></small><Button label="停止任务" icon="pi pi-stop" severity="warn" outlined size="small" @click="stopCurrentExport" /></div>
       <p v-if="exportNotice" class="settings-success"><i class="pi pi-check-circle" />{{ exportNotice }}</p>
     </div>
-    <template #footer><Button label="关闭" severity="secondary" text :disabled="exporting" @click="advancedExportVisible = false" /><Button :label="advancedExportMode === 'pdf' ? '选择目录并导出' : '选择 ZIP 位置并生成'" :icon="advancedExportMode === 'pdf' ? 'pi pi-file' : 'pi pi-box'" :loading="exporting" @click="runAdvancedExport" /></template>
+    <template #footer><Button label="关闭" severity="secondary" text :disabled="exporting" @click="advancedExportVisible = false" /><Button :label="advancedExportMode === 'pdf' ? '选择目录并导出' : '选择 ZIP 位置并生成'" :icon="advancedExportMode === 'pdf' ? 'pi pi-file' : 'pi pi-box'" :loading="exporting" :disabled="isAndroid && !mobileExportsDir" @click="runAdvancedExport" /></template>
   </Dialog>
   <Teleport to="body">
     <Transition name="image-viewer">
